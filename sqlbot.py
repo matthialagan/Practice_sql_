@@ -5,13 +5,12 @@ from io import StringIO
 import requests
 import os
 
-# -------------------- Hugging Face Helper --------------------
-# 🔹 Hardcode your Hugging Face API token here
-HF_API_TOKEN = "hf_your_token_here"  # <-- REPLACE with your actual token
+# Load environment variables
+HF_API_TOKEN =   # Replace with your actual token or load from .env
 
-# Model ID: google/gemma-3-270m
 HF_MODEL_URL = "https://api-inference.huggingface.co/models/google/gemma-3-270m"
 
+# -------------------- Hugging Face Helper --------------------
 def ask_huggingface(prompt):
     """
     Calls Hugging Face Inference API to get help/explanation.
@@ -33,14 +32,13 @@ def ask_huggingface(prompt):
     except Exception as e:
         return f"❌ Error calling Hugging Face API: {e}"
 
-
 # -------------------- SQLite Memory Setup --------------------
 conn = sqlite3.connect(":memory:", check_same_thread=False)
 cursor = conn.cursor()
 
 # -------------------- Streamlit App --------------------
 st.set_page_config(page_title="SQL Practice Agent", layout="wide")
-st.title("🗂️ SQL Practice Chatbot with Hugging Face Gemma-3-270m")
+st.title("🗂️ SQL Practice Chatbot")
 
 # Section: Manual DDL input
 st.subheader("📌 Enter Small Data (DDL + DML)")
@@ -57,8 +55,9 @@ if st.button("Run DDL/DML"):
 st.divider()
 
 # Section: File Upload
-st.subheader("📂 Upload CSV/Excel")
+st.subheader("📂 Upload CSV/Excel or Enter Kaggle Dataset ID")
 uploaded_file = st.file_uploader("Upload CSV/Excel", type=["csv", "xlsx"])
+kaggle_url = st.text_input("Or enter Kaggle Dataset ID (example: zynicide/wine-reviews)")
 
 if uploaded_file:
     with st.spinner("Loading file..."):
@@ -73,6 +72,32 @@ if uploaded_file:
             st.dataframe(df.head())
         except Exception as e:
             st.error(f"❌ Error reading file: {e}")
+
+elif kaggle_url:
+    with st.spinner("Fetching Kaggle dataset..."):
+        try:
+            # Use KaggleHub to download dataset
+            import kagglehub
+            path = kagglehub.dataset_download(kaggle_url)
+            files = os.listdir(path)
+            dataset_file = None
+            for f in files:
+                if f.endswith(".csv") or f.endswith(".xlsx"):
+                    dataset_file = os.path.join(path, f)
+                    break
+            if not dataset_file:
+                st.error("❌ No CSV/Excel file found in dataset")
+            else:
+                if dataset_file.endswith(".csv"):
+                    df = pd.read_csv(dataset_file)
+                else:
+                    df = pd.read_excel(dataset_file)
+
+                df.to_sql("uploaded_table", conn, if_exists="replace", index=False)
+                st.success("✅ Kaggle dataset loaded into SQLite as 'uploaded_table'")
+                st.dataframe(df.head())
+        except Exception as e:
+            st.error(f"❌ Error fetching Kaggle dataset: {e}")
 
 st.divider()
 
@@ -91,10 +116,10 @@ if st.button("Run Query"):
 st.divider()
 
 # Section: Help Button
-st.subheader("🆘 Need Help? (Gemma-3-270m)")
+st.subheader("🆘 Need Help?")
 help_input = st.text_area("Type your question (about SQL, errors, or dataset):", height=100)
 if st.button("Get Help from AI"):
-    with st.spinner("Contacting Hugging Face Gemma-3-270m..."):
+    with st.spinner("Contacting Hugging Face..."):
         help_response = ask_huggingface(help_input)
         st.info(help_response)
 
