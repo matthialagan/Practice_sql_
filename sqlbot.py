@@ -3,19 +3,30 @@ import sqlite3
 import pandas as pd
 from io import StringIO
 import requests
-from kaggle.api.kaggle_api_extended import KaggleApi
+import os
 
 # -------------------- Hugging Face Helper --------------------
-HF_API_TOKEN = "hf_your_token_here"  # 🔹 Replace with your token
+# 🔹 Hardcode your Hugging Face API token here
+HF_API_TOKEN = "hf_your_token_here"  # <-- REPLACE with your actual token
+
+# Model ID: google/gemma-3-270m
 HF_MODEL_URL = "https://api-inference.huggingface.co/models/google/gemma-3-270m"
 
 def ask_huggingface(prompt):
+    """
+    Calls Hugging Face Inference API to get help/explanation.
+    """
+    if not HF_API_TOKEN:
+        return "⚠️ Hugging Face API token is missing."
+
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": prompt}
+
     try:
         response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
         response.raise_for_status()
         output = response.json()
+        # Extract generated_text if present
         if isinstance(output, list) and "generated_text" in output[0]:
             return output[0]["generated_text"]
         return str(output)
@@ -23,14 +34,13 @@ def ask_huggingface(prompt):
         return f"❌ Error calling Hugging Face API: {e}"
 
 
-# -------------------- SQLite Setup --------------------
+# -------------------- SQLite Memory Setup --------------------
 conn = sqlite3.connect(":memory:", check_same_thread=False)
 cursor = conn.cursor()
 
-
-# -------------------- Streamlit UI --------------------
+# -------------------- Streamlit App --------------------
 st.set_page_config(page_title="SQL Practice Agent", layout="wide")
-st.title("🗂️ SQL Practice Chatbot with Hugging Face & Kaggle")
+st.title("🗂️ SQL Practice Chatbot with Hugging Face Gemma-3-270m")
 
 # Section: Manual DDL input
 st.subheader("📌 Enter Small Data (DDL + DML)")
@@ -63,35 +73,6 @@ if uploaded_file:
             st.dataframe(df.head())
         except Exception as e:
             st.error(f"❌ Error reading file: {e}")
-
-st.divider()
-
-# Section: Kaggle Dataset
-st.subheader("📥 Load Dataset from Kaggle")
-kaggle_url = st.text_input("Enter Kaggle Dataset URL (example: https://www.kaggle.com/datasets/anninasimon/employee-salary-dataset)")
-
-if st.button("Load Kaggle Dataset"):
-    with st.spinner("Downloading from Kaggle..."):
-        try:
-            dataset_ref = kaggle_url.split("datasets/")[-1]
-
-            api = KaggleApi()
-            api.authenticate()
-
-            api.dataset_download_files(dataset_ref, path=".", unzip=True)
-
-            # Try loading first CSV file
-            import glob
-            files = glob.glob("*.csv")
-            if files:
-                df = pd.read_csv(files[0])
-                df.to_sql("kaggle_table", conn, if_exists="replace", index=False)
-                st.success(f"✅ Kaggle dataset '{files[0]}' loaded into SQLite as 'kaggle_table'")
-                st.dataframe(df.head())
-            else:
-                st.error("❌ No CSV file found in Kaggle dataset.")
-        except Exception as e:
-            st.error(f"❌ Kaggle Load Error: {e}")
 
 st.divider()
 
